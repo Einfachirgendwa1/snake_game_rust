@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::time::Duration;
 
 use bevy::{
@@ -7,6 +6,7 @@ use bevy::{
     core_pipeline::core_2d::Camera2dBundle,
     ecs::{
         component::Component,
+        schedule::IntoSystemConfigs,
         system::{Commands, Query, Res, ResMut},
     },
     math::primitives::Rectangle,
@@ -18,8 +18,8 @@ use bevy::{
     DefaultPlugins,
 };
 
-const RECTANGLE_DIMENSIONS: (f32, f32) = (20 as f32, 20 as f32);
-const BORDER_SIZE: f32 = 1 as f32;
+const RECTANGLE_DIMENSIONS: (f32, f32) = (20., 20.);
+const BORDER_SIZE: f32 = 1.;
 const SNAKE_MOVE_DELAY: Duration = Duration::from_secs(1);
 
 enum Direction {
@@ -27,28 +27,6 @@ enum Direction {
     Down,
     Left,
     Right,
-}
-
-#[derive(Component)]
-struct Position {
-    x: i32,
-    y: i32,
-}
-
-impl Position {
-    fn to_bevy_pos(&self) -> (f32, f32) {
-        (
-            // x * rect + x * border = x * (rect + border)
-            self.x as f32 * (RECTANGLE_DIMENSIONS.0 + BORDER_SIZE),
-            self.y as f32 * (RECTANGLE_DIMENSIONS.1 + BORDER_SIZE),
-        )
-    }
-}
-
-impl Display for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("X: {} Y: {}", self.x, self.y))
-    }
 }
 
 #[derive(Component)]
@@ -60,33 +38,30 @@ struct Snake {
 
 #[derive(Component)]
 struct Head {
-    position: Position,
+    position: Transform,
     direction: Direction,
 }
 
 #[derive(Component)]
-struct BodyPart(Position);
+struct BodyPart(Transform);
+
+fn to_transform(x: i32, y: i32) -> Transform {
+    Transform::from_xyz(
+        x as f32 * (RECTANGLE_DIMENSIONS.0 + BORDER_SIZE),
+        y as f32 * (RECTANGLE_DIMENSIONS.1 + BORDER_SIZE),
+        1.,
+    )
+}
 
 fn make_snake(mut commands: Commands) {
     commands.spawn(Snake {
         head: Head {
-            position: Position { x: 1, y: 1 },
+            position: to_transform(3, 1),
             direction: Direction::Right,
         },
-        body: vec![
-            BodyPart(Position { x: 2, y: 1 }),
-            BodyPart(Position { x: 3, y: 1 }),
-        ],
+        body: vec![BodyPart(to_transform(2, 1)), BodyPart(to_transform(1, 1))],
         timer: Timer::new(SNAKE_MOVE_DELAY, bevy::time::TimerMode::Repeating),
     });
-}
-
-fn print_positions(query: Query<&Snake>) {
-    let snake = query.iter().next().unwrap();
-    println!("Head: {}", snake.head.position);
-    for bodypart in &snake.body {
-        println!("BodyPart: {}", bodypart.0);
-    }
 }
 
 fn move_snake(mut query: Query<&mut Snake>, time: Res<Time>) {
@@ -98,42 +73,40 @@ fn move_snake(mut query: Query<&mut Snake>, time: Res<Time>) {
 
     match snake.head.direction {
         Direction::Up => {
-            snake.head.position.y += 1;
+            snake.head.position.translation.y += 1.;
             for bodypart in snake.body.iter_mut() {
-                bodypart.0.y += 1;
+                bodypart.0.translation.y += 1.;
             }
         }
         Direction::Down => {
-            snake.head.position.y += 1;
+            snake.head.position.translation.y += 1.;
             for bodypart in snake.body.iter_mut() {
-                bodypart.0.y += 1;
+                bodypart.0.translation.y += 1.;
             }
         }
         Direction::Left => {
-            snake.head.position.x -= 1;
+            snake.head.position.translation.x -= 1.;
             for bodypart in snake.body.iter_mut() {
-                bodypart.0.x -= 1;
+                bodypart.0.translation.x -= 1.;
             }
         }
         Direction::Right => {
-            snake.head.position.x += 1;
+            snake.head.position.translation.x += 1.;
             for bodypart in snake.body.iter_mut() {
-                bodypart.0.x += 1;
+                bodypart.0.translation.x += 1.;
             }
         }
     }
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
-
-fn render(
+fn setup(
     mut commands: Commands,
+    query: Query<&Snake>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    query: Query<&Snake>,
 ) {
+    commands.spawn(Camera2dBundle::default());
+
     let snake = query.iter().next().unwrap();
 
     let handle = Mesh2dHandle(meshes.add(Rectangle::new(
@@ -141,12 +114,12 @@ fn render(
         RECTANGLE_DIMENSIONS.1,
     )));
 
-    let pos = snake.head.position.to_bevy_pos();
+    let pos = snake.head.position.translation;
 
     commands.spawn(MaterialMesh2dBundle {
         mesh: handle,
         material: materials.add(Color::GREEN),
-        transform: Transform::from_xyz(pos.0, pos.1, 1 as f32),
+        transform: Transform::from_xyz(pos.x, pos.y, 1.),
         ..default()
     });
 
@@ -156,12 +129,12 @@ fn render(
             RECTANGLE_DIMENSIONS.1,
         )));
 
-        let pos = bodypart.0.to_bevy_pos();
+        let pos = bodypart.0.translation;
 
         commands.spawn(MaterialMesh2dBundle {
             mesh: handle,
             material: materials.add(Color::DARK_GREEN),
-            transform: Transform::from_xyz(pos.0, pos.1, 1 as f32),
+            transform: Transform::from_xyz(pos.x, pos.y, 1.),
             ..default()
         });
     }
@@ -170,9 +143,7 @@ fn render(
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, setup)
-        .add_systems(Startup, make_snake)
-        .add_systems(Update, render)
+        .add_systems(Startup, (make_snake, setup).chain())
         .add_systems(Update, move_snake)
         .run();
 }
