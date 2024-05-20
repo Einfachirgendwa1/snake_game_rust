@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::time::Duration;
 
 use bevy::{
     app::{App, Startup, Update},
@@ -6,11 +7,12 @@ use bevy::{
     core_pipeline::core_2d::Camera2dBundle,
     ecs::{
         component::Component,
-        system::{Commands, Query, ResMut},
+        system::{Commands, Query, Res, ResMut},
     },
     math::primitives::Rectangle,
     render::{color::Color, mesh::Mesh},
     sprite::{ColorMaterial, MaterialMesh2dBundle, Mesh2dHandle},
+    time::{Time, Timer},
     transform::components::Transform,
     utils::default,
     DefaultPlugins,
@@ -18,6 +20,7 @@ use bevy::{
 
 const RECTANGLE_DIMENSIONS: (f32, f32) = (20 as f32, 20 as f32);
 const BORDER_SIZE: f32 = 1 as f32;
+const SNAKE_MOVE_DELAY: Duration = Duration::from_secs(1);
 
 enum Direction {
     Up,
@@ -52,6 +55,7 @@ impl Display for Position {
 struct Snake {
     head: Head,
     body: Vec<BodyPart>,
+    timer: Timer,
 }
 
 #[derive(Component)]
@@ -73,6 +77,7 @@ fn make_snake(mut commands: Commands) {
             BodyPart(Position { x: 2, y: 1 }),
             BodyPart(Position { x: 3, y: 1 }),
         ],
+        timer: Timer::new(SNAKE_MOVE_DELAY, bevy::time::TimerMode::Repeating),
     });
 }
 
@@ -84,9 +89,12 @@ fn print_positions(query: Query<&Snake>) {
     }
 }
 
-fn move_snake(mut query: Query<&mut Snake>) {
-    println!("Bewege die Schlange...");
+fn move_snake(mut query: Query<&mut Snake>, time: Res<Time>) {
     let snake = &mut query.iter_mut().next().unwrap();
+
+    if !snake.timer.tick(time.delta()).finished() {
+        return;
+    }
 
     match snake.head.direction {
         Direction::Up => {
@@ -165,5 +173,6 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Startup, make_snake)
         .add_systems(Update, render)
+        .add_systems(Update, move_snake)
         .run();
 }
