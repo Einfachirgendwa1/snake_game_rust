@@ -54,11 +54,7 @@ fn random_transform() -> Transform {
     transform(rng.gen_range(0..10), rng.gen_range(0..10))
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn setup(mut commands: Commands) {
     // Camera
     commands.spawn(Camera2dBundle::default());
 
